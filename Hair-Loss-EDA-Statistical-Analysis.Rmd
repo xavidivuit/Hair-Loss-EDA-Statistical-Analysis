@@ -1,0 +1,278 @@
+---
+title: "Hair-Loss-EDA-Statistical-Analysis"
+author: "Xavier Tarragó Claramunt"
+date: "2025-28-10"
+output: html_document
+---
+
+## ***Data Import, Export and Management***
+
+```{r}
+
+# Load required libraries:
+library(readr)
+library(knitr)
+
+# Read the file and suppress column type messages
+HairFallH <- read_csv("Predict Hair Fall.csv") 
+
+# Replace all cells containing "No Data" with NA
+HairFallH[HairFallH == "No Data"] <- NA
+
+# Display the first 6 rows as a table
+kable(head(HairFallH)) 
+```
+
+
+```{r}
+# Create a data frame summarising the dataset characteristics
+resum <- data.frame(
+  Data_type  = sapply(HairFallH, class),                          # Data type of each variable
+  Size       = sapply(HairFallH, function(x) sum(!is.na(x))),     # Number of non-NA observations
+  Null_values = sapply(HairFallH, function(x) sum(is.na(x))))     # Number of NA values
+
+# Display as a table
+kable(resum)
+```
+
+
+### Proportion of people by stress level, grouped by type of nutritional deficiency
+
+```{r}
+# Remove NA values before any operation
+HairFallH_clean <- na.omit(HairFallH)
+
+# Verify that all NAs have been removed
+any(is.na(HairFallH_clean))
+
+# Create the contingency table
+taula <- table(`Nutritional Deficience` = HairFallH_clean[["Nutritional Deficiencies"]],
+               `Stress` = HairFallH_clean$Stress)
+
+# Compute row proportions (percentage of each stress level within each nutritional deficiency)
+prop_tabla <- prop.table(taula, margin = 1)  
+
+# Round proportions to 2 decimal places
+round(prop_tabla, 2)
+```
+
+Deficiencies such as Protein and Vitamin E show a higher proportion of high stress and a lower proportion of low stress, suggesting a possible association with elevated stress levels. In contrast, deficiencies such as Biotin and Omega-3 are more common among people with low stress, indicating a link with lower stress. Some deficiencies, such as Selenium and Magnesium, show a higher proportion of moderate stress, reflecting a more balanced stress distribution. The table allows us to observe how different nutritional deficiencies relate to stress levels, although it does not establish causality.
+
+### Relationship between stress and hair loss
+
+```{r}
+
+# Recode 0/1 values with descriptive labels
+HairFallH_clean$Hair_Loss_Label <- ifelse(HairFallH_clean$`Hair Loss` == 0, "No Hair Loss", "Hair Loss")
+
+library(ggplot2)
+
+# Bar chart comparing stress levels by hair loss status
+ggplot(HairFallH_clean, aes(x = Hair_Loss_Label, fill = Stress)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Proportion of stress levels according to Hair Loss",
+       x = "Hair Loss", y = "Frequency") +
+  theme_minimal()
+
+```
+
+Based on the results, no clear difference is observed between age and stress. The trend remains similar in both groups, with moderate stress being the most common in both cases.
+
+### Relationship between hair loss and specific nutritional deficiencies, counting the number of people per deficiency type
+
+```{r}
+
+# Create the contingency table
+taula <- table(HairFallH_clean$`Nutritional Deficiencies`, HairFallH_clean$Hair_Loss_Label)
+
+# Display as a table
+kable(taula)
+
+```
+
+### Number of people with hair loss, grouped by stress level, who smoke and are below the mean age
+
+```{r}
+# Calculate the mean age
+mean_age <- mean(HairFallH_clean$Age)
+mean_age
+
+# Filter people meeting all specified conditions
+Filtrat <- HairFallH_clean[
+  HairFallH_clean$Hair_Loss_Label == "Hair Loss" &
+  HairFallH_clean$Smoking == "Yes" &
+  HairFallH_clean$Age < mean_age, 
+]
+
+# Display the table grouped by stress level
+taula_df <- as.data.frame(table(Filtrat$Stress))
+colnames(taula_df) <- c("Stress level", "Number of people")
+
+kable(taula_df)
+
+```
+
+
+### Nutritional deficiency among the youngest people with hair loss, who smoke, have high stress and are under medical treatment
+
+```{r}
+
+# Find the minimum age among people meeting all specified conditions
+subset_filtrat <- HairFallH_clean[
+  HairFallH_clean$Hair_Loss_Label == "Hair Loss" &
+  HairFallH_clean$Smoking == "Yes" &
+  HairFallH_clean$Stress == "High" &
+  HairFallH_clean$`Medications & Treatments` != "",   # Ensure the field is not empty
+]
+  
+# Find the minimum age
+min_age <- min(subset_filtrat$Age)
+
+# Select people with this minimum age
+youngest <- subset_filtrat[subset_filtrat$Age == min_age, ]
+
+# Display their nutritional deficiencies
+kable(youngest[, c("Age", "Hair_Loss_Label", "Smoking", "Stress", "Medications & Treatments", "Nutritional Deficiencies")])
+
+```
+
+In conclusion, the minimum age among people meeting these conditions is 24 years. Three individuals present hair loss, smoke, have high stress and are under medical treatment; two have Vitamin A deficiency and one has Vitamin D deficiency.
+
+### Most frequent medical conditions among people with hair loss, and how this frequency varies by the presence or absence of environmental factors
+
+```{r, message=FALSE, warning=FALSE}
+
+# Load required libraries:
+# dplyr for data manipulation, ggplot2 for visualisation
+library(dplyr)
+library(ggplot2)
+
+# Filter only people with hair loss
+HairFall_FT <- HairFallH_clean %>%
+  filter(Hair_Loss_Label == "Hair Loss") %>%
+  filter(`Medical Conditions` != "", `Environmental Factors` != "")
+
+# Count people with hair loss for each medical condition by environmental factor
+taula <- HairFall_FT %>%
+  count(`Medical Conditions`, `Environmental Factors`)
+
+# Bar chart
+ggplot(taula, aes(x = reorder(`Medical Conditions`, -n), y = n, fill = `Environmental Factors`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "Most common medical conditions in people with hair loss",
+    x = "Medical Condition",
+    y = "Number of people",
+    fill = "Environmental Factors"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))   # Rotate x-axis labels 45 degrees for readability
+
+```
+
+In general, the most common medical conditions among people with hair loss are Alopecia Areata, Androgenetic Alopecia, Psoriasis and Seborrheic Dermatitis. Environmental factors seem to have a slightly greater impact on conditions related to the skin or scalp, but are not the main factor in most cases.
+
+### Boxplot relating age to hair loss — what can we conclude?
+
+```{r}
+
+# Create the boxplot with yellow fill and appropriate labels
+boxplot(Age ~ `Hair_Loss_Label`, data = HairFallH_clean, col = "yellow",
+        ylab = "Age", xlab = "Hair Loss",
+        main = "Boxplot showing the relationship between age and hair loss") 
+
+```
+
+The boxplot shows that people without hair loss have a higher median age (around 35 years) and a larger box, indicating greater age dispersion in this group. In contrast, people with hair loss show a slightly lower median (around 34 years) and a narrower box, suggesting that ages are more concentrated around the median. Therefore, in this sample, people without hair loss tend to be slightly older and show more age variability than those who do experience hair loss.
+
+### Frequency table and chart relating medical conditions to hair loss
+
+```{r}
+
+library(dplyr) 
+
+# Create a frequency table for each combination of hair loss and medical condition
+freq_table <- HairFallH_clean %>%
+  group_by(Hair_Loss_Label, `Medical Conditions`) %>%  
+  summarise(n = n(), .groups = "drop") %>%
+  arrange(desc(n))
+
+freq_table
+
+# Heat map
+library(ggplot2)
+
+ggplot(freq_table, aes(x = Hair_Loss_Label, y = `Medical Conditions`, fill = n)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(
+    title = "Heat map: Medical conditions according to hair loss",
+    x = "Hair Loss",
+    y = "Medical Conditions",
+    fill = "Number of people"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+### Age histogram for people with hair loss, with normal density curve and normality assessment
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+
+# Filter only people with hair loss
+hair_loss_data <- HairFallH_clean %>%
+  filter(Hair_Loss_Label == "Hair Loss")
+  
+# Calculate mean and standard deviation of age
+mean_age <- mean(hair_loss_data$Age)
+sd_age   <- sd(hair_loss_data$Age)
+  
+# Create age range for the normal curve
+age_range <- seq(min(hair_loss_data$Age),
+                 max(hair_loss_data$Age),
+                 length.out = 100)
+  
+# Create data frame for the normal curve
+normal_curve <- data.frame(
+  x = age_range,
+  y = dnorm(age_range, mean = mean_age, sd = sd_age)
+)
+
+# Plot histogram + normal curve
+ggplot(hair_loss_data, aes(x = Age)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 20, fill = "lightyellow", color = "black") +
+  geom_density(color = "darkblue", linewidth = 1.2) +
+  geom_line(data = normal_curve, aes(x = x, y = y),
+            color = "red", linewidth = 1.2, linetype = "dashed") +
+  labs(
+    title = "Histogram of the age of people with hair loss",
+    x = "Age",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+# Shapiro-Wilk normality test
+shapiro_result <- shapiro.test(hair_loss_data$Age)
+
+# Q-Q plot to visualise normality
+qqnorm(hair_loss_data$Age)
+qqline(hair_loss_data$Age, col = "red")
+
+# Numerical results
+cat("Shapiro-Wilk test p-value:", round(shapiro_result$p.value, 6), "\n")
+
+# Interpretation
+if (shapiro_result$p.value < 0.05) {
+  cat("Conclusion: The Q-Q plot may give the impression that normality is acceptable because the central part follows the line, but the formal test detects significant deviations (p < 0.05). This means we reject the null hypothesis of normality: the distribution differs significantly from a normal distribution.\n")
+} else {
+  cat("Conclusion: Normality cannot be rejected (p >= 0.05). Ages approximately follow a normal distribution.\n")
+}
+```
+
+The histogram shows two density curves: the red curve represents the theoretical normal distribution calculated from the sample mean and standard deviation, while the blue curve corresponds to the empirical density estimated from the actual data. In this case, the blue curve does not fully coincide with the red one — it shows slight deviations and possible bimodality, suggesting that the age distribution of people with hair loss does not follow a perfectly normal shape.
+
+The Q-Q plot shows that the points approximately follow the normality line in the central region, with visible deviations at the tails. A Shapiro-Wilk test is performed below to confirm.
